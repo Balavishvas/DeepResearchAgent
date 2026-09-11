@@ -6,7 +6,13 @@ from deep_research.state import Summary
 from deep_research.prompt import summarize_webpage_prompt
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-_DEFAULT_SUMMARIZATION_MODEL = "gemini-2.5-flash"
+import os
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_DEFAULT_SUMMARIZATION_MODEL = "gemini-3.5-flash-lite"
 
 def get_today_str() -> str:
     """Get current date formatted for display in prompts and outputs.
@@ -17,18 +23,48 @@ def get_today_str() -> str:
     now = datetime.now()
     return f"{now:%a} {now:%b} {now.day}, {now:%Y}"
 
-summarization_model = ChatGoogleGenerativeAI(
-    model=_DEFAULT_SUMMARIZATION_MODEL,
-    temperature=1.0,
-    max_tokens=None,
-    timeout=None
-)
-tavily_client=TavilyClient()
+def get_summarization_model(model_name: str = _DEFAULT_SUMMARIZATION_MODEL) -> ChatGoogleGenerativeAI:
+    """Get the summarization model instance."""
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        temperature=1.0,
+        max_tokens=None,
+        timeout=None
+    )
+
+# Lazy singletons — created on first use so importing utils never fails
+_summarization_model = None
+_tavily_client = None
+
+
+def _get_or_create_summarization_model():
+    """Return the module-level summarization model, creating it lazily."""
+    global _summarization_model
+    if _summarization_model is None:
+        _summarization_model = get_summarization_model()
+    return _summarization_model
+
+
+def _get_or_create_tavily_client():
+    """Return the module-level Tavily client, creating it lazily."""
+    global _tavily_client
+    if _tavily_client is None:
+        _tavily_client = TavilyClient()
+    return _tavily_client
+
+
+# Keep backward-compatible module-level names as properties via a helper
+def __getattr__(name):
+    if name == "summarization_model":
+        return _summarization_model
+    if name == "tavily_client":
+        return _tavily_client
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 # ===== SEARCH FUNCTIONS =====
 
 def tavily_search_multiple(
     search_queries: List[str], 
-    max_results: int = 3, 
+    max_results: int = 5, 
     topic: Literal["general", "news", "finance"] = "general", 
     include_raw_content: bool = True, 
 ) -> List[dict]:
@@ -44,11 +80,11 @@ def tavily_search_multiple(
         List of search result dictionaries
     """
     
-    # Execute searches sequentially. Note: yon can use AsyncTavilyClient to parallelize this step.
-    tavily_client = TavilyClient()
+    # Execute searches sequentially. Note: you can use AsyncTavilyClient to parallelize this step.
+    client = _get_or_create_tavily_client()
     search_docs = []
     for query in search_queries:
-        result = tavily_client.search(
+        result = client.search(
             query,
             max_results=max_results,
             include_raw_content=include_raw_content,
@@ -68,28 +104,41 @@ def summarize_webpage_content(webpage_content: str, model_name: str = _DEFAULT_S
     Returns:
         Formatted summary with key excerpts
     """
-    try:
-        structured_model = summarization_model.with_structured_output(Summary)
-        
-        # Generate summary
-        summary = structured_model.invoke([
-            HumanMessage(content=summarize_webpage_prompt.format(
-                webpage_content=webpage_content, 
-                date=get_today_str()
-            ))
-        ])
-        
-        # Format summary with clear structure
-        formatted_summary = (
-            f"<summary>\n{summary.summary}\n</summary>\n\n"
-            f"<key_excerpts>\n{summary.key_excerpts}\n</key_excerpts>"
-        )
-        
-        return formatted_summary
-        
-    except Exception as e:
-        print(f"Failed to summarize webpage: {str(e)}")
-        return webpage_content[:1000] + "..." if len(webpage_content) > 1000 else webpage_content
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            model = _get_or_create_summarization_model()
+            structured_model = model.with_structured_output(Summary)
+
+            # Generate summary
+            summary = structured_model.invoke([
+                HumanMessage(content=summarize_webpage_prompt.format(
+                    webpage_content=webpage_content,
+                    date=get_today_str()
+                ))
+            ])
+
+            # Format summary with clear structure
+            formatted_summary = (
+                f"<summary>\n{summary.summary}\n</summary>\n\n"
+                f"<key_excerpts>\n{summary.key_excerpts}\n</key_excerpts>"
+            )
+            return formatted_summary
+
+        except Exception as e:
+            err_str = str(e)
+            # Handle rate limit (429) with exponential backoff
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                wait_time = 30 * (attempt + 1)  # 30s, 60s, 90s
+                print(f"Rate limit hit. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(wait_time)
+                if attempt == max_retries - 1:
+                    print("Max retries reached. Falling back to raw content.")
+                    return webpage_content[:1000] + "..." if len(webpage_content) > 1000 else webpage_content
+            else:
+                print(f"Failed to summarize webpage: {err_str}")
+                return webpage_content[:1000] + "..." if len(webpage_content) > 1000 else webpage_content
+
       
 def deduplicate_search_results(search_results: List[dict]) -> dict:
     """Deduplicate search results by URL to avoid processing duplicate content.
@@ -163,7 +212,7 @@ from langchain_core.tools import tool, InjectedToolArg
 @tool(parse_docstring=True)
 def tavily_search(
     query: str,
-    max_results: Annotated[int, InjectedToolArg] = 3,
+    max_results: Annotated[int, InjectedToolArg] = 5,
     topic: Annotated[Literal["general", "news", "finance"], InjectedToolArg] = "general",
 ) -> str:
     """Fetch results from Tavily search API with content summarization.
@@ -215,3 +264,55 @@ def think_tool(reflection: str) -> str:
         Confirmation that reflection was recorded for decision-making
     """
     return f"Reflection recorded: {reflection}"
+
+
+def format_messages(messages: list) -> None:
+    """Format and display a list of LangChain messages nicely in Jupyter notebooks.
+
+    Args:
+        messages: List of LangChain message objects to display
+    """
+    import json
+
+    def _extract_text(content) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            texts = []
+            for p in content:
+                if isinstance(p, dict) and "text" in p:
+                    texts.append(p["text"])
+                elif hasattr(p, "text"):
+                    texts.append(p.text)
+                else:
+                    texts.append(str(p))
+            return "\n".join(texts)
+        return str(content)
+
+    for msg in messages:
+        msg_type = getattr(msg, "type", msg.__class__.__name__)
+        header = msg_type.upper()
+
+        print(f"\n{'=' * 30} {header} {'=' * 30}\n")
+
+        # Display tool calls if present on AI messages
+        tool_calls = getattr(msg, "tool_calls", None)
+        if tool_calls:
+            for tc in tool_calls:
+                name = tc.get("name", "Tool")
+                args = tc.get("args", {})
+                call_id = tc.get("id", "")
+                print(f"Tool Call: {name}")
+                if call_id:
+                    print(f"  ID: {call_id}")
+                print(f"  Args: {json.dumps(args, indent=2)}")
+
+        # Display content
+        content = getattr(msg, "content", "")
+        text = _extract_text(content).strip()
+        if text:
+            name = getattr(msg, "name", "")
+            if name:
+                print(f"[{name}]")
+            print(text)
+

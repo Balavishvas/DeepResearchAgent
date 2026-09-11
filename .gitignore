@@ -13,3 +13,7 @@ wheels/
 .env
 .env.local
 .env.*.local
+
+# Runtime local data & history
+data_history.json
+.ipynb_checkpoints/

@@ -63,6 +63,26 @@ class ResearcherOutputState(TypedDict):
     raw_notes: Annotated[List[str], operator.add]
     researcher_messages: Annotated[Sequence[BaseMessage], add_messages]
 
+class SupervisorState(TypedDict):
+    """
+    State for the multi-agent research supervisor.
+    
+    Manages coordination between supervisor and research agents, tracking
+    research progress and accumulating findings from multiple sub-agents.
+    """
+    
+    # Messages exchanged with supervisor for coordination and decision-making
+    supervisor_messages: Annotated[Sequence[BaseMessage], add_messages]
+    # Detailed research brief that guides the overall research direction
+    research_brief: str
+    # Processed and structured notes ready for final report generation
+    notes: Annotated[list[str], operator.add]
+    # Counter tracking the number of research iterations performed
+    research_iterations: int
+    # Raw unprocessed research notes collected from sub-agent research
+    raw_notes: Annotated[list[str], operator.add]
+    
+
 # ===== STRUCTURED OUTPUT SCHEMAS =====
 class ClarifyWithUser(BaseModel):
     """Schema for user clarification decision and questions."""
@@ -83,7 +103,18 @@ class ResearchQuestion(BaseModel):
     research_brief: str = Field(
         description="A research question that will be used to guide the research.",
     )
+
 class Summary(BaseModel):
     """Schema for webpage content summarization."""
     summary: str = Field(description="Concise summary of the webpage content")
     key_excerpts: str = Field(description="Important quotes and excerpts from the content")
+
+class ConductResearch(BaseModel):
+    """Call this tool to conduct research on a specific topic."""
+    research_topic: str = Field(
+        description="The topic to research. Should be a single topic, described in high detail."
+    )
+
+class ResearchComplete(BaseModel):
+    """Call this tool to indicate that the research is complete."""
+    pass

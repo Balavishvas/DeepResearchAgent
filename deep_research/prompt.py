@@ -12,11 +12,12 @@ Assess whether you need to ask a clarifying question, or if the user has already
 IMPORTANT: If you can see in the messages history that you have already asked a clarifying question, you almost always do not need to ask another one. Only ask another question if ABSOLUTELY NECESSARY.
 
 If there are acronyms, abbreviations, or unknown terms, ask the user to clarify.
-If you need to ask a question, follow these guidelines:
-- Be concise while gathering all necessary information
-- Make sure to gather all the information needed to carry out the research task in a concise, well-structured manner.
-- Use bullet points or numbered lists if appropriate for clarity. Make sure that this uses markdown formatting and will be rendered correctly if the string output is passed to a markdown renderer.
-- Don't ask for unnecessary information, or information that the user has already provided. If you can see that the user has already provided the information, do not ask for it again.
+If you need to ask a question, format it in a structured, user-friendly markdown layout:
+- Start with a polite introductory sentence acknowledging their request (e.g., "I'd like to clarify what you're looking for regarding \"<topic>\". Could you please specify:")
+- Provide 2 to 3 numbered points categorizing the key dimensions that need clarification (e.g., 1. **Time period**: ..., 2. **Criteria**: ..., 3. **Context**: ...).
+- Under relevant numbered points, include bullet points with concrete examples or options (e.g., - Option A, - Option B).
+- End with a brief closing sentence (e.g., "This will help me provide you with the most relevant information.").
+- Don't ask for unnecessary information, or information that the user has already provided.
 
 Respond in valid JSON format with these exact keys:
 "need_clarification": boolean,
