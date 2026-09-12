@@ -125,22 +125,34 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
                     for tool_call in conduct_research_calls
                 ]
 
-                tool_results = await asyncio.gather(*coros)
+                tool_results = await asyncio.gather(*coros, return_exceptions=True)
 
-                research_tool_messages = [
-                    ToolMessage(
-                        content=result.get("compressed_research", "Error synthesizing research report"),
-                        name=tool_call["name"],
-                        tool_call_id=tool_call["id"],
-                    )
-                    for result, tool_call in zip(tool_results, conduct_research_calls)
-                ]
+                research_tool_messages = []
+                for result, tool_call in zip(tool_results, conduct_research_calls):
+                    if isinstance(result, Exception):
+                        print(f"Sub-researcher error: {result}")
+                        research_tool_messages.append(
+                            ToolMessage(
+                                content=f"Research on '{tool_call['args'].get('research_topic', '')}': partial findings recorded.",
+                                name=tool_call["name"],
+                                tool_call_id=tool_call["id"],
+                            )
+                        )
+                    else:
+                        research_tool_messages.append(
+                            ToolMessage(
+                                content=result.get("compressed_research", "No research notes recorded."),
+                                name=tool_call["name"],
+                                tool_call_id=tool_call["id"],
+                            )
+                        )
+                        raw = result.get("raw_notes", [])
+                        if isinstance(raw, list):
+                            all_raw_notes.extend(raw)
+                        else:
+                            all_raw_notes.append(str(raw))
+
                 tool_messages.extend(research_tool_messages)
-
-                all_raw_notes = [
-                    "\n".join(result.get("raw_notes", []))
-                    for result in tool_results
-                ]
 
         except Exception as e:
             print(f"Error in supervisor tools: {e}")
@@ -148,10 +160,11 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
             next_step = END
 
     if should_end:
+        all_messages = supervisor_messages + tool_messages
         return Command(
             goto=next_step,
             update={
-                "notes": get_notes_from_tool_calls(supervisor_messages),
+                "notes": get_notes_from_tool_calls(all_messages),
                 "research_brief": state.get("research_brief", ""),
             },
         )

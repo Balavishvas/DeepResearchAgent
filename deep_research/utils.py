@@ -230,7 +230,7 @@ def tavily_search(
         [query],
         max_results=max_results,
         topic=topic,
-        include_raw_content=True,
+        include_raw_content=False,
     )
 
     unique_results = deduplicate_search_results(search_results)
