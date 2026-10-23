@@ -135,6 +135,11 @@ DeepResearchAgent/
 ```
 
 ---
+## To run this
+cd d:\DeepResearchAgent\DeepResearchAgent
+.\.venv\Scripts\Activate.ps1
+python -m http.server 8000
+http://localhost:8000
 
 ## 📜 License
 
