@@ -4,7 +4,9 @@ from tavily import TavilyClient
 from langchain_google_genai import ChatGoogleGenerativeAI
 from deep_research.state import Summary
 from deep_research.prompt import summarize_webpage_prompt
+from deep_research.llm import get_model, get_model_for
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 
 import os
 import time
@@ -12,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_DEFAULT_SUMMARIZATION_MODEL = "gemini-3.5-flash-lite"
+_DEFAULT_SUMMARIZATION_MODEL = None
 
 def get_today_str() -> str:
     """Get current date formatted for display in prompts and outputs.
@@ -23,14 +25,10 @@ def get_today_str() -> str:
     now = datetime.now()
     return f"{now:%a} {now:%b} {now.day}, {now:%Y}"
 
-def get_summarization_model(model_name: str = _DEFAULT_SUMMARIZATION_MODEL) -> ChatGoogleGenerativeAI:
-    """Get the summarization model instance."""
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=1.0,
-        max_tokens=None,
-        timeout=None
-    )
+def get_summarization_model(model_name: str | None = None):
+    """Build the webpage summarizer using the selected local/cloud provider."""
+    return get_model(model_name, temperature=0.1)
+
 
 # Lazy singletons — created on first use so importing utils never fails
 _summarization_model = None
@@ -94,7 +92,7 @@ def tavily_search_multiple(
 
     return search_docs
 
-def summarize_webpage_content(webpage_content: str, model_name: str = _DEFAULT_SUMMARIZATION_MODEL) -> str:
+def summarize_webpage_content(webpage_content: str, model_name: str = _DEFAULT_SUMMARIZATION_MODEL, config: RunnableConfig | None = None) -> str:
     """Summarize webpage content using the configured summarization model.
 
     Args:
@@ -107,7 +105,7 @@ def summarize_webpage_content(webpage_content: str, model_name: str = _DEFAULT_S
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            model = _get_or_create_summarization_model()
+            model = get_model_for(config, "summarization", temperature=0.1)
             structured_model = model.with_structured_output(Summary)
 
             # Generate summary
@@ -159,7 +157,7 @@ def deduplicate_search_results(search_results: List[dict]) -> dict:
     
     return unique_results
 
-def process_search_results(unique_results: dict) -> dict:
+def process_search_results(unique_results: dict, config: RunnableConfig | None = None) -> dict:
     """Process search results by summarizing content where available.
     
     Args:
@@ -176,7 +174,7 @@ def process_search_results(unique_results: dict) -> dict:
             content = result['content']
         else:
             # Summarize raw content for better processing
-            content = summarize_webpage_content(result['raw_content'])
+            content = summarize_webpage_content(result['raw_content'], config=config)
         
         summarized_results[url] = {
             'title': result['title'],
@@ -214,6 +212,7 @@ def tavily_search(
     query: str,
     max_results: Annotated[int, InjectedToolArg] = 5,
     topic: Annotated[Literal["general", "news", "finance"], InjectedToolArg] = "general",
+    config: RunnableConfig = None,
 ) -> str:
     """Fetch results from Tavily search API with content summarization.
 
@@ -221,6 +220,7 @@ def tavily_search(
         query: A single search query to execute
         max_results: Maximum number of results to return
         topic: Topic to filter results by ('general', 'news', 'finance')
+        config: LangChain runtime configuration passed to the selected model provider.
 
     Returns:
         Formatted string of search results with summaries
@@ -230,12 +230,12 @@ def tavily_search(
         [query],
         max_results=max_results,
         topic=topic,
-        include_raw_content=False,
+        include_raw_content=True,
     )
 
     unique_results = deduplicate_search_results(search_results)
 
-    summarized_results = process_search_results(unique_results)
+    summarized_results = process_search_results(unique_results, config=config)
     return format_search_output(summarized_results)
 
 @tool(parse_docstring=False)

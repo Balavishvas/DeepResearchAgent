@@ -1,146 +1,153 @@
 # 🔬 Deep Research Agent
 
-> **An Autonomous Multi-Agent Literature, Fact-Checking & Web Intelligence System built with LangGraph, Google Gemini, and Tavily.**
+An autonomous multi-agent research system built with **LangGraph**, **Tavily Search**, and selectable **Ollama (local)** or **Google Gemini (cloud)** models.
 
----
+## Overview
 
-## 🌟 Overview
+The application coordinates specialized agents to clarify a research question, create a research brief, conduct parallel web research, summarize source pages, compress findings, and generate a citation-backed report.
 
-**Deep Research Agent** is an enterprise- and academic-grade autonomous research platform. Unlike standard single-turn LLM prompts or naive retrieval-augmented generation (RAG), this system orchestrates a **hierarchical, cyclic state machine** across specialized autonomous agents to scope topics, clarify ambiguities, execute parallel web searches, and synthesize comprehensive, citation-backed executive research reports.
+## Agent workflow
 
----
+1. **Scoping agent** — identifies ambiguity and asks clarification questions.
+2. **Research brief agent** — turns the user request into a focused research plan.
+3. **Supervisor agent** — decomposes the plan and coordinates researcher workers.
+4. **Parallel researcher agents** — use Tavily search and reasoning tools to gather evidence.
+5. **Webpage summarization and compression** — condense source material and research notes.
+6. **Final report agent** — synthesizes the evidence into a structured Markdown report.
 
-## 🏛️ Multi-Agent Architecture
+All LLM calls use the centralized `deep_research/llm.py` model factory. The same provider and model selection is propagated through the graph, including parallel researcher calls and webpage summarization.
 
-The architecture is implemented in **LangGraph**, combining deterministic structured outputs with dynamic multi-agent execution loops:
+## Supported model providers
 
-```mermaid
-graph TD
-    START([User Topic / Query]) --> Scoping[1. Scoping Agent]
-    Scoping -->|Ambiguous Request| Clarify[Clarify with User]
-    Clarify -->|User Clarification| Scoping
-    Scoping -->|Requirements Validated| Brief[2. Research Brief Formulator]
-    Brief --> Supervisor[3. Lead Supervisor Orchestrator]
-    
-    subgraph Parallel_Research [Parallel Autonomous Research Subgraph]
-        Supervisor -->|Topic 1| R1[Researcher Worker 1 + Tavily]
-        Supervisor -->|Topic 2| R2[Researcher Worker 2 + Tavily]
-        Supervisor -->|Topic N| RN[Researcher Worker N + Tavily]
-        R1 -->|Extracted Findings| Supervisor
-        R2 -->|Extracted Findings| Supervisor
-        RN -->|Extracted Findings| Supervisor
-    end
-    
-    Supervisor -->|Stopping Condition Met| Synthesis[4. Final Report Synthesizer]
-    Synthesis --> END([Comprehensive Research Report])
-```
+| Provider | Runs where | Example model |
+|---|---|---|
+| Ollama | Your local machine | `qwen2.5:7b` |
+| Google Gemini | Google cloud API | `gemini-2.5-flash` |
 
-### The 5 Pipeline Components:
+Choose the provider and model in the Streamlit sidebar. Ollama is the default so the project can run locally without a paid LLM API. Gemini requires a Google AI Studio API key.
 
-1. **🎯 Scoping Agent (`clarify_with_user`)**: Evaluates user prompts using structured Pydantic schemas. If a query is overly ambiguous, it halts and interactively requests clarification from the user rather than hallucinating.
-2. **📋 Research Brief Formulator (`write_research_brief`)**: Transforms conversation history into an exhaustive, structured research brief with temporal grounding and explicit validation criteria.
-3. **⚙️ Supervisor Orchestrator (`supervisor_agent`)**: Analyzes the brief and coordinates autonomous research sub-tasks.
-4. **🔍 Parallel Researcher Units (`researcher_agent`)**: Dispatches concurrent research tasks with Tavily Search and ReAct reasoning to gather evidence and compress raw findings.
-5. **✍️ Final Report Synthesizer (`final_report_generation`)**: Ingests all deduplicated notes and compiles an academic-grade markdown report complete with executive summary, comparative analysis, and citations.
+> Tavily is the web-search service and remains an external API dependency in both modes. Ollama makes model inference local; it does not make web search offline.
 
----
+## Requirements
 
-## 💻 Streamlit Web Application
-
-The project includes an interactive, professional **Streamlit** user interface:
-
-- **Sidebar Configuration Panel**:
-  - **🔧 Models Configuration**: Independent selection for Final Report Generation and Supervisor orchestration models (`gemini-3.5-flash-lite`, `gemini-2.5-flash`).
-  - **🔍 Search & Research Parameters**:
-    - Toggle *Allow Clarification Questions*
-    - Slider *Max Concurrent Researchers* (1 – 5)
-    - Slider *Supervisor Max Iterations* (1 – 5)
-    - Slider *Max Tool Calls / Researcher* (1 – 10)
-  - **🔑 Live Service Status**: Real-time validation badges for Gemini and Tavily API credentials.
-- **Main Research Studio**:
-  - Suggested topic pills for quick testing.
-  - Live progress cards tracking each agent stage in real time.
-  - Interactive clarification dialog if the scoping agent requests more details.
-  - Final report reader with execution KPIs (Elapsed Time, Evidence Units, Word Count) and **📥 Download (.md)** support.
-- **Architecture Presentation Tab**:
-  - Embedded Mermaid architecture diagram and theoretical breakdown for academic evaluations and project guide reviews.
-- **Session History Tab**:
-  - Search history persisted locally for quick review and report export.
-
----
-
-## 🚀 Quick Start
-
-### 1. Prerequisites
 - Python 3.10+
-- [uv](https://github.com/astral-sh/uv) (recommended) or standard Python `venv`
-- Google Gemini API Key: [Google AI Studio](https://aistudio.google.com/app/apikey)
-- Tavily API Key: [Tavily Search](https://app.tavily.com)
+- [uv](https://docs.astral.sh/uv/) or Python `venv`
+- [Tavily API key](https://app.tavily.com) for web research
+- For local inference: [Ollama](https://ollama.com/download)
+- For cloud inference: [Google AI Studio API key](https://aistudio.google.com/app/apikey)
 
-### 2. Installation
+## Installation
 
-Clone the repository:
 ```bash
 git clone https://github.com/Balavishvas/DeepResearchAgent.git
 cd DeepResearchAgent
-```
-
-Install dependencies using `uv`:
-```bash
 uv sync
 ```
 
-### 3. Environment Configuration
+Create your environment file:
 
-Copy the example environment file and add your API keys:
+**Windows PowerShell**
+```powershell
+Copy-Item .env.example .env
+```
+
+**macOS / Linux**
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Add your Tavily key to `.env`:
+
 ```env
-GOOGLE_API_KEY=your_gemini_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here
+TAVILY_API_KEY=your_tavily_api_key
 ```
 
-### 4. Launch the Application
+## Run with Ollama (local)
 
-Run the Streamlit application:
+1. Install and start Ollama.
+2. Pull a supported model:
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+3. Configure `.env`:
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+```
+
+4. Start the application:
+
 ```bash
 uv run streamlit run app.py
 ```
 
-The application will be accessible at `http://localhost:8501`.
+Ollama must be running while the application is using local inference. Select **Ollama (Local)** in the sidebar and choose a model that has been pulled.
 
----
+## Run with Google Gemini (cloud)
 
-## 📂 Project Structure
+1. Add your Google AI Studio key to `.env`:
+
+```env
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+2. Run the application:
+
+```bash
+uv run streamlit run app.py
+```
+
+Select **Google Gemini (Cloud)** in the sidebar. The API key is read from the environment and is never entered into the UI.
+
+## Switch providers
+
+You can switch between Ollama and Gemini from the Streamlit sidebar without changing agent code. Each agent receives the selected provider and model through LangGraph runtime configuration.
+
+## Configuration reference
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` or `gemini` | `ollama` |
+| `OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434` |
+| `OLLAMA_MODEL` | Default local model | `qwen2.5:7b` |
+| `GEMINI_API_KEY` | Google Gemini API key | — |
+| `GEMINI_MODEL` | Default Gemini model | `gemini-2.5-flash` |
+| `TAVILY_API_KEY` | Tavily web search key | — |
+
+## Project structure
 
 ```
 DeepResearchAgent/
-├── app.py                      # Streamlit interactive application
+├── app.py
 ├── deep_research/
 │   ├── agents/
-│   │   ├── __init__.py         # Agent exports
-│   │   ├── scoping_agent.py    # Clarification and Research Brief agent
-│   │   ├── supervisor_agent.py # Lead supervisor & parallel researcher graph
-│   │   ├── research_agent.py   # ReAct Tavily web search agent
-│   │   └── full_agent.py       # Compiled end-to-end LangGraph pipeline
-│   ├── prompt.py               # Prompt templates & guidelines
-│   ├── state.py                # Pydantic schemas & TypedDict state definitions
-│   └── utils.py                # Search tools & formatting utilities
-├── notebooks/                  # Interactive development & testing notebooks
-├── pyproject.toml              # Project dependencies and packaging
-└── README.md                   # Project documentation
+│   │   ├── scoping_agent.py
+│   │   ├── supervisor_agent.py
+│   │   ├── research_agent.py
+│   │   └── full_agent.py
+│   ├── llm.py                 # Centralized Ollama/Gemini model factory
+│   ├── prompt.py
+│   ├── state.py
+│   └── utils.py               # Tavily search and webpage summarization
+├── notebooks/
+├── .env.example
+├── pyproject.toml
+└── README.md
 ```
 
----
-## To run this
-cd d:\DeepResearchAgent\DeepResearchAgent
-.\.venv\Scripts\Activate.ps1
-python -m http.server 8000
-http://localhost:8000
+## Notes
 
-## 📜 License
+- Never commit your real `.env` file or API keys.
+- Tool calling and structured output support can vary by Ollama model. Use a capable instruct model for the supervisor and researcher agents.
+- The selected Ollama model must be available locally before starting a research run.
+- Gemini usage is subject to Google AI Studio model availability, quotas, and billing policies.
 
-This project is licensed under the MIT License.
+## License
+
+MIT

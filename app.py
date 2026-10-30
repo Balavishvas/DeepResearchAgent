@@ -253,21 +253,33 @@ with st.sidebar:
     st.markdown("### ⚙️ System Configuration")
     st.caption("Customize autonomous multi-agent parameters")
 
-    # 1. Models Section
-    with st.expander("🔧 Models Configuration", expanded=False):
-        report_model = st.selectbox(
-            "Final Report Model",
-            options=["gemini-3.5-flash-lite", "gemini-2.5-flash"],
-            index=0,
-            help="High-capacity generative model responsible for synthesizing the comprehensive report.",
+    # 1. Provider & Models
+    with st.expander("🔧 Models Configuration", expanded=True):
+        llm_provider = st.selectbox(
+            "LLM Provider",
+            options=["ollama", "gemini"],
+            format_func=lambda value: "Ollama (Local)" if value == "ollama" else "Google Gemini (Cloud)",
+            help="Choose whether all agents run locally or use Gemini in the cloud.",
         )
-
-        supervisor_model = st.selectbox(
-            "Supervisor & Scoping Model",
-            options=["gemini-3.5-flash-lite", "gemini-2.5-flash"],
-            index=0,
-            help="Orchestration model that scopes the topic, formulates research briefs, and directs researchers.",
-        )
+        if llm_provider == "ollama":
+            selected_model = st.selectbox(
+                "Ollama Model",
+                options=["qwen2.5:7b", "qwen2.5:3b", "llama3.1:8b"],
+                index=0,
+                help="Pull the selected model with: ollama pull <model-name>",
+            )
+            ollama_base_url = st.text_input(
+                "Ollama URL",
+                value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            )
+        else:
+            selected_model = st.selectbox(
+                "Gemini Model",
+                options=["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
+                index=0,
+                help="Requires GEMINI_API_KEY or GOOGLE_API_KEY in your .env file.",
+            )
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
     # 2. Search & Research Parameters
     with st.expander("🔍 Search & Research Parameters", expanded=True):
@@ -311,17 +323,16 @@ with st.sidebar:
     tavily_key = os.environ.get("TAVILY_API_KEY")
 
     st.markdown("#### 🔑 Service Status")
-    col_k1, col_k2 = st.columns(2)
-    with col_k1:
-        if gemini_key:
-            st.markdown("<span class='badge badge-success'>● Gemini API Active</span>", unsafe_allow_html=True)
-        else:
-            st.markdown("<span class='badge badge-warning'>▲ Gemini Missing</span>", unsafe_allow_html=True)
-    with col_k2:
-        if tavily_key:
-            st.markdown("<span class='badge badge-success'>● Tavily Active</span>", unsafe_allow_html=True)
-        else:
-            st.markdown("<span class='badge badge-warning'>▲ Tavily Missing</span>", unsafe_allow_html=True)
+    if llm_provider == "ollama":
+        st.markdown("<span class='badge badge-info'>● Ollama selected — local runtime</span>", unsafe_allow_html=True)
+    elif gemini_key:
+        st.markdown("<span class='badge badge-success'>● Gemini API key detected</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge badge-warning'>▲ Gemini API key missing</span>", unsafe_allow_html=True)
+    if tavily_key:
+        st.markdown("<span class='badge badge-success'>● Tavily API key detected</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge badge-warning'>▲ Tavily API key missing</span>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -373,9 +384,9 @@ async def execute_research_pipeline(query_text: str, thread_id: str, is_clarific
         "configurable": {
             "thread_id": thread_id,
             "recursion_limit": 60,
-            "research_model": f"google_genai:{supervisor_model}",
-            "compression_model": f"google_genai:{supervisor_model}",
-            "final_report_model": f"google_genai:{report_model}",
+            "llm_provider": llm_provider,
+            "research_model_name": selected_model,
+            "ollama_base_url": ollama_base_url,
             "max_concurrent_researchers": max_concurrent_researchers,
             "max_researcher_iterations": supervisor_max_iterations,
             "max_react_tool_calls": max_tool_calls,
@@ -595,7 +606,7 @@ with tab_research:
         if st.session_state.thread_id:
             st.markdown(
                 f"<div style='font-size: 12px; color: #94a3b8; padding-top: 10px;'>"
-                f"Session ID: <code>{st.session_state.thread_id[:8]}...</code> | Active Engine: <code>{supervisor_model}</code>"
+                f"Session ID: <code>{st.session_state.thread_id[:8]}...</code> | Active Engine: <code>{llm_provider} / {selected_model}</code>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -704,7 +715,7 @@ with tab_research:
             )
         with col_m4:
             st.markdown(
-                f"<div class='stat-box'><div class='stat-val'>{report_model}</div><div class='stat-label'>Synthesizer</div></div>",
+                f"<div class='stat-box'><div class='stat-val'>{selected_model}</div><div class='stat-label'>Synthesizer</div></div>",
                 unsafe_allow_html=True,
             )
 
