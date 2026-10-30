@@ -63,7 +63,7 @@ async def supervisor(state: SupervisorState, config=None) -> Command[Literal["su
         },
     )
 
-async def supervisor_tools(state: SupervisorState) -> Command[Literal["supervisor", "__end__"]]:
+async def supervisor_tools(state: SupervisorState, config=None) -> Command[Literal["supervisor", "__end__"]]:
     """Execute supervisor decisions - either conduct research or end the process."""
     supervisor_messages = state.get("supervisor_messages", [])
     research_iterations = state.get("research_iterations", 0)
@@ -112,7 +112,7 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
                             HumanMessage(content=tool_call["args"]["research_topic"])
                         ],
                         "research_topic": tool_call["args"]["research_topic"],
-                    })
+                    }, config=config)
                     for tool_call in conduct_research_calls
                 ]
 
