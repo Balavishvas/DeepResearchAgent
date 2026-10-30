@@ -8,7 +8,7 @@ import os
 from typing_extensions import Literal
 from dotenv import load_dotenv
 
-from langchain.chat_models import init_chat_model
+from deep_research.llm import get_model_for
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, filter_messages
 from langchain_core.runnables import RunnableConfig
 
@@ -23,9 +23,6 @@ load_dotenv()
 # ===== CONFIGURATION =====
 
 # Default to Google Gemini Flash-Lite
-_DEFAULT_RESEARCH_MODEL = "google_genai:gemini-3.5-flash-lite"
-_DEFAULT_COMPRESSION_MODEL = "google_genai:gemini-3.5-flash-lite"
-
 tools = [tavily_search, think_tool]
 tools_by_name = {tool.name: tool for tool in tools}
 
@@ -33,8 +30,7 @@ tools_by_name = {tool.name: tool for tool in tools}
 
 def llm_call(state: ResearcherState, config: RunnableConfig):
     """Analyze current state and decide on next actions."""
-    model_name = config.get("configurable", {}).get("research_model", _DEFAULT_RESEARCH_MODEL)
-    model = init_chat_model(model_name, temperature=0.7)
+    model = get_model_for(config, "researcher", temperature=0.2)
     model_with_tools = model.bind_tools(tools)
     return {
         "researcher_messages": [
@@ -66,8 +62,7 @@ def tool_node(state: ResearcherState, config: RunnableConfig):
 
 def compress_research(state: ResearcherState, config: RunnableConfig) -> dict:
     """Compress research findings into a concise summary."""
-    model_name = config.get("configurable", {}).get("compression_model", _DEFAULT_COMPRESSION_MODEL)
-    compress_model = init_chat_model(model_name, temperature=0.7)
+    compress_model = get_model_for(config, "compression", temperature=0.2)
 
     system_message = compress_research_system_prompt.format(date=get_today_str())
     messages = [SystemMessage(content=system_message)] + state.get("researcher_messages", []) + [HumanMessage(content=compress_research_simple_human_message)]
