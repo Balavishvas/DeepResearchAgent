@@ -606,7 +606,7 @@ with tab_research:
         if st.session_state.thread_id:
             st.markdown(
                 f"<div style='font-size: 12px; color: #94a3b8; padding-top: 10px;'>"
-                f"Session ID: <code>{st.session_state.thread_id[:8]}...</code> | Active Engine: <code>{supervisor_model}</code>"
+                f"Session ID: <code>{st.session_state.thread_id[:8]}...</code> | Active Engine: <code>{llm_provider} / {selected_model}</code>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -715,7 +715,7 @@ with tab_research:
             )
         with col_m4:
             st.markdown(
-                f"<div class='stat-box'><div class='stat-val'>{report_model}</div><div class='stat-label'>Synthesizer</div></div>",
+                f"<div class='stat-box'><div class='stat-val'>{selected_model}</div><div class='stat-label'>Synthesizer</div></div>",
                 unsafe_allow_html=True,
             )
 
