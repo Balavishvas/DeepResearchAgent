@@ -9,7 +9,6 @@ from typing_extensions import Literal
 from dotenv import load_dotenv
 
 from langchain_core.messages import HumanMessage, AIMessage, get_buffer_string
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 
@@ -24,29 +23,22 @@ from deep_research.state import (
     ResearchQuestion,
 )
 from deep_research.utils import get_today_str
+from deep_research.llm import get_model_for
 
 load_dotenv()
 
 # ===== CONFIGURATION =====
-_DEFAULT_SCOPING_MODEL = os.environ.get("SCOPING_MODEL", "gemini-3.5-flash-lite")
-
-scoping_model = ChatGoogleGenerativeAI(
-    model=_DEFAULT_SCOPING_MODEL,
-    temperature=1.0,
-    max_tokens=None,
-    timeout=None,
-)
 
 # ===== AGENT NODES =====
 
-def clarify_with_user(state: AgentState) -> Command[Literal["write_research_brief", "__end__"]]:
+def clarify_with_user(state: AgentState, config=None) -> Command[Literal["write_research_brief", "__end__"]]:
     """
     Determine if the user's request contains sufficient information to proceed with research.
     
     Uses structured output to make deterministic decisions and avoid hallucination.
     Routes to either research brief generation or ends with a clarification question.
     """
-    structured_output_model = scoping_model.with_structured_output(ClarifyWithUser)
+    structured_output_model = get_model_for(config, "scoping", temperature=0.1).with_structured_output(ClarifyWithUser)
 
     response = structured_output_model.invoke([
         HumanMessage(
@@ -69,14 +61,14 @@ def clarify_with_user(state: AgentState) -> Command[Literal["write_research_brie
         )
 
 
-def write_research_brief(state: AgentState) -> dict:
+def write_research_brief(state: AgentState, config=None) -> dict:
     """
     Transform the conversation history into a comprehensive research brief.
     
     Uses structured output to ensure the brief follows the required format
     and contains all necessary details for effective research.
     """
-    structured_output_model = scoping_model.with_structured_output(ResearchQuestion)
+    structured_output_model = get_model_for(config, "brief", temperature=0.2).with_structured_output(ResearchQuestion)
 
     response = structured_output_model.invoke([
         HumanMessage(
