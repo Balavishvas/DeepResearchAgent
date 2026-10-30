@@ -4,6 +4,7 @@ from tavily import TavilyClient
 from langchain_google_genai import ChatGoogleGenerativeAI
 from deep_research.state import Summary
 from deep_research.prompt import summarize_webpage_prompt
+from deep_research.llm import get_model
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 import os
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_DEFAULT_SUMMARIZATION_MODEL = "gemini-3.5-flash-lite"
+_DEFAULT_SUMMARIZATION_MODEL = None
 
 def get_today_str() -> str:
     """Get current date formatted for display in prompts and outputs.
@@ -23,14 +24,10 @@ def get_today_str() -> str:
     now = datetime.now()
     return f"{now:%a} {now:%b} {now.day}, {now:%Y}"
 
-def get_summarization_model(model_name: str = _DEFAULT_SUMMARIZATION_MODEL) -> ChatGoogleGenerativeAI:
-    """Get the summarization model instance."""
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=1.0,
-        max_tokens=None,
-        timeout=None
-    )
+def get_summarization_model(model_name: str | None = None):
+    """Build the webpage summarizer using the selected local/cloud provider."""
+    return get_model(model_name, temperature=0.1)
+
 
 # Lazy singletons — created on first use so importing utils never fails
 _summarization_model = None
