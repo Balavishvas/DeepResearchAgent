@@ -212,6 +212,7 @@ def tavily_search(
     query: str,
     max_results: Annotated[int, InjectedToolArg] = 5,
     topic: Annotated[Literal["general", "news", "finance"], InjectedToolArg] = "general",
+    config: RunnableConfig = None,
 ) -> str:
     """Fetch results from Tavily search API with content summarization.
 
@@ -219,6 +220,7 @@ def tavily_search(
         query: A single search query to execute
         max_results: Maximum number of results to return
         topic: Topic to filter results by ('general', 'news', 'finance')
+        config: LangChain runtime configuration passed to the selected model provider.
 
     Returns:
         Formatted string of search results with summaries
