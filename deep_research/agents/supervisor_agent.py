@@ -16,7 +16,6 @@ from langchain_core.messages import (
     ToolMessage,
     filter_messages,
 )
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 
@@ -24,21 +23,12 @@ from deep_research.prompt import lead_researcher_prompt
 from deep_research.agents.research_agent import researcher_agent
 from deep_research.state import SupervisorState, ConductResearch, ResearchComplete
 from deep_research.utils import get_today_str, think_tool
+from deep_research.llm import get_model_for
 
 load_dotenv()
 
 # ===== CONFIGURATION =====
-_DEFAULT_SUPERVISOR_MODEL = os.environ.get("SUPERVISOR_MODEL", "gemini-3.5-flash-lite")
-
 supervisor_tools_list = [ConductResearch, ResearchComplete, think_tool]
-
-supervisor_model = ChatGoogleGenerativeAI(
-    model=_DEFAULT_SUPERVISOR_MODEL,
-    temperature=0.7,
-    max_tokens=32000,
-    timeout=None,
-)
-supervisor_model_with_tools = supervisor_model.bind_tools(supervisor_tools_list)
 
 max_researcher_iterations = 6
 max_concurrent_researchers = 3
@@ -51,7 +41,7 @@ def get_notes_from_tool_calls(messages: list[BaseMessage]) -> list[str]:
 
 # ===== AGENT NODES =====
 
-async def supervisor(state: SupervisorState) -> Command[Literal["supervisor_tools"]]:
+async def supervisor(state: SupervisorState, config=None) -> Command[Literal["supervisor_tools"]]:
     """Coordinate research activities."""
     supervisor_messages = state.get("supervisor_messages", [])
 
@@ -62,7 +52,8 @@ async def supervisor(state: SupervisorState) -> Command[Literal["supervisor_tool
     )
     messages = [SystemMessage(content=system_message)] + supervisor_messages
 
-    response = await supervisor_model_with_tools.ainvoke(messages)
+    model = get_model_for(config, "supervisor", temperature=0.2).bind_tools(supervisor_tools_list)
+    response = await model.ainvoke(messages)
 
     return Command(
         goto="supervisor_tools",
