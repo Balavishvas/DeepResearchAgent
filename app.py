@@ -258,6 +258,7 @@ with st.sidebar:
         llm_provider = st.selectbox(
             "LLM Provider",
             options=["ollama", "gemini"],
+            index=0 if os.getenv("LLM_PROVIDER", "ollama").lower() == "ollama" else 1,
             format_func=lambda value: "Ollama (Local)" if value == "ollama" else "Google Gemini (Cloud)",
             help="Choose whether all agents run locally or use Gemini in the cloud.",
         )
@@ -265,7 +266,7 @@ with st.sidebar:
             selected_model = st.selectbox(
                 "Ollama Model",
                 options=["qwen2.5:7b", "qwen2.5:3b", "llama3.1:8b"],
-                index=0,
+                index=["qwen2.5:7b", "qwen2.5:3b", "llama3.1:8b"].index(os.getenv("OLLAMA_MODEL", "qwen2.5:7b")) if os.getenv("OLLAMA_MODEL", "qwen2.5:7b") in ["qwen2.5:7b", "qwen2.5:3b", "llama3.1:8b"] else 0,
                 help="Pull the selected model with: ollama pull <model-name>",
             )
             ollama_base_url = st.text_input(
@@ -275,8 +276,8 @@ with st.sidebar:
         else:
             selected_model = st.selectbox(
                 "Gemini Model",
-                options=["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
-                index=0,
+                options=["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+                index=["gemini-2.5-flash", "gemini-2.5-flash-lite"].index(os.getenv("GEMINI_MODEL", "gemini-2.5-flash")) if os.getenv("GEMINI_MODEL", "gemini-2.5-flash") in ["gemini-2.5-flash", "gemini-2.5-flash-lite"] else 0,
                 help="Requires GEMINI_API_KEY or GOOGLE_API_KEY in your .env file.",
             )
             ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
